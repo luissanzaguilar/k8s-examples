@@ -1,30 +1,4 @@
-# mysql-config.yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: mysql-config
-data:
-  my.cnf: |
-    [mysqld]
-    server-id=1
-    log-bin=mysql-bin
-    binlog_format=row
-    innodb_flush_log_at_trx_commit=1
-    sync_binlog=1
-    character-set-server=utf8mb4
-    collation-server=utf8mb4_unicode_ci
-    default-authentication-plugin=mysql_native_password
-
-  init.sql: |
-    CREATE USER IF NOT EXISTS 'replicator'@'%' IDENTIFIED BY 'replicatepass';
-    GRANT REPLICATION SLAVE ON *.* TO 'replicator'@'%';
-    
-    CREATE USER IF NOT EXISTS 'appuser'@'%' IDENTIFIED BY 'apppass';
-    CREATE DATABASE IF NOT EXISTS appdb;
-    GRANT ALL PRIVILEGES ON appdb.* TO 'appuser'@'%';
-    FLUSH PRIVILEGES;
----
-# mysql-statefulset-simple.yaml
+# mysql-statefulset-fixed.yaml
 apiVersion: v1
 kind: Service
 metadata:
@@ -53,6 +27,19 @@ spec:
     app: mysql
     role: replica
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-config
+data:
+  init.sql: |
+    CREATE USER IF NOT EXISTS 'replicator'@'%' IDENTIFIED BY 'replicatepass';
+    GRANT REPLICATION SLAVE ON *.* TO 'replicator'@'%';
+    CREATE USER IF NOT EXISTS 'appuser'@'%' IDENTIFIED BY 'apppass';
+    CREATE DATABASE IF NOT EXISTS appdb;
+    GRANT ALL PRIVILEGES ON appdb.* TO 'appuser'@'%';
+    FLUSH PRIVILEGES;
+---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -70,22 +57,27 @@ spec:
     spec:
       initContainers:
         - name: init-mysql
-          image: mysql:8.0
-          command: ['bash', '-c']
+          image: busybox
+          command: ['sh', '-c']
           args:
             - |
-              # Generar server-id basado en el índice del pod
-              [[ `hostname` =~ -([0-9]+)$ ]] || exit 1
-              ordinal=$${BASH_REMATCH[1]}
-              echo "[mysqld]" > /mnt/conf.d/server-id.cnf
-              echo "server-id=$$((100 + $$ordinal))" >> /mnt/conf.d/server-id.cnf
+              # Crear configuración de replicación
+              mkdir -p /mnt/conf.d
+              hostname=$(hostname)
+              ordinal=${hostname##*-}
               
-              # Configurar como replica si no es el primer pod
-              if [[ $$ordinal -gt 0 ]]; then
-                echo "read_only=1" >> /mnt/conf.d/server-id.cnf
+              echo "[mysqld]" > /mnt/conf.d/replication.cnf
+              echo "server-id=$((100 + $ordinal))" >> /mnt/conf.d/replication.cnf
+              echo "log-bin=mysql-bin" >> /mnt/conf.d/replication.cnf
+              echo "binlog_format=row" >> /mnt/conf.d/replication.cnf
+              
+              if [ "$ordinal" -gt "0" ]; then
+                echo "read_only=1" >> /mnt/conf.d/replication.cnf
               fi
+              
+              echo "Configuración creada para pod $ordinal con server-id $((100 + $ordinal))"
           volumeMounts:
-            - name: conf
+            - name: mysql-conf
               mountPath: /mnt/conf.d
       containers:
         - name: mysql
@@ -105,10 +97,10 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /var/lib/mysql
-            - name: conf
-              mountPath: /etc/mysql/conf.d
-            - name: config
-              mountPath: /docker-entrypoint-initdb.d
+            - name: mysql-conf
+              mountPath: /etc/mysql/conf.d  # ✅ Solo un volumen montado aquí
+            - name: init-scripts
+              mountPath: /docker-entrypoint-initdb.d  # ✅ Ruta diferente
           resources:
             requests:
               cpu: 250m
@@ -117,21 +109,19 @@ spec:
               cpu: 500m
               memory: 1Gi
           livenessProbe:
-            exec:
-              command: ["mysqladmin", "ping", "-h", "localhost", "-uroot", "-ppassword"]
+            tcpSocket:
+              port: 3306
             initialDelaySeconds: 60
             periodSeconds: 10
-            timeoutSeconds: 5
           readinessProbe:
             exec:
-              command: ["mysql", "-h", "localhost", "-uroot", "-ppassword", "-e", "SELECT 1"]
+              command: ["mysql", "-h", "127.0.0.1", "-uroot", "-ppassword", "-e", "SELECT 1"]
             initialDelaySeconds: 30
             periodSeconds: 5
-            timeoutSeconds: 3
       volumes:
-        - name: conf
+        - name: mysql-conf
           emptyDir: {}
-        - name: config
+        - name: init-scripts
           configMap:
             name: mysql-config
             items:
