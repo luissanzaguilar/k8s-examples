@@ -1,0 +1,26 @@
+alias kubectl="minikube kubectl --"
+kubectl run -it testpod --image nginx
+kubectl deploy nginx --image nginx -n sanz --dry-run=client -o yaml
+kubectl apply -f https://k8s.io/examples/pods/simple-pod.yaml
+kubectl api-resources
+
+kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.15.2/config/manifests/metallb-native.yaml
+kubectl create -f ip-pool.yml
+
+git clone https://github.com/kubernetes/ingress-nginx
+cd ingress-nginx/deploy/static/provider/cloud/
+kubectl create -f deploy.yaml
+
+kubectl create deployment web-main --image=luissanzaguilar/spring-boot-web-main:latest --replicas=1
+kubectl create deployment web-one --image=luissanzaguilar/spring-boot-web-one:latest --replicas=1
+kubectl create deployment web-two --image=luissanzaguilar/spring-boot-web-two:latest --replicas=1
+
+kubectl expose deployment web-main --target-port=8080 --port=8080
+kubectl expose deployment web-one --target-port=8080 --port=8080
+kubectl expose deployment web-two --target-port=8080 --port=8080
+
+kubectl create -f ingress.yml
+
+kubectl get ingress
+kubectl describe ingress
+

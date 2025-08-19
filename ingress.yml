@@ -1,0 +1,31 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hotel-app
+  annotations:
+    kubernetes.io/ingress.class: nginx
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /main
+        pathType: Prefix
+        backend:
+          service:
+            name: web-main
+            port:
+              number: 8080
+      - path: /hello
+        pathType: Prefix
+        backend:
+          service:
+            name: web-one
+            port:
+              number: 8080
+      - path: /bye
+        pathType: Prefix
+        backend:
+          service:
+            name: web-two
+            port:
+              number: 8080
