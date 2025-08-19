@@ -11,7 +11,7 @@ spec:
     metadata:
       name: webserver
       labels:
-        app: nginx
+        app: web
     spec:
       containers:
         - name: web-container
