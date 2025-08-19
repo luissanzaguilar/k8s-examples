@@ -1,0 +1,7 @@
+apiVersion: v1
+data:
+  MYSQL_ROOT_PASS: 'root123'
+  MYSQL_WHATEVER: 'another'
+kind: ConfigMap
+metadata:
+  name: conf
