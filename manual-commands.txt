@@ -15,11 +15,19 @@ kubectl create deployment web-main --image=luissanzaguilar/spring-boot-web-main:
 kubectl create deployment web-one --image=luissanzaguilar/spring-boot-web-one:latest --replicas=1
 kubectl create deployment web-two --image=luissanzaguilar/spring-boot-web-two:latest --replicas=1
 
+kubectl get pod -A
+
 kubectl expose deployment web-main --target-port=8080 --port=8080
 kubectl expose deployment web-one --target-port=8080 --port=8080
 kubectl expose deployment web-two --target-port=8080 --port=8080
 
 kubectl create -f ingress.yml
+
+kubectl port-forward -n ingress-nginx service/ingress-nginx-controller 8080:80
+# y probar desde otra terminal los curl:
+curl http://localhost:8080/main
+curl http://localhost:8080/hello
+curl http://localhost:8080/bye
 
 kubectl get ingress
 kubectl describe ingress
